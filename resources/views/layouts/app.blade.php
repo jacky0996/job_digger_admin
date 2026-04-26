@@ -26,6 +26,11 @@
                                   {{ request()->routeIs('vacancies.*') ? 'text-white' : '' }}">
                             職缺搜尋
                         </a>
+                        <a href="{{ route('help') }}"
+                           class="text-slate-300 hover:text-white transition
+                                  {{ request()->routeIs('help') ? 'text-white' : '' }}">
+                            使用說明
+                        </a>
                     </nav>
 
                     <button type="button"
@@ -59,6 +64,11 @@
                        class="block px-3 py-2 rounded-md text-sm text-slate-200 hover:bg-slate-800
                               {{ request()->routeIs('vacancies.*') ? 'bg-slate-800 text-white' : '' }}">
                         職缺搜尋
+                    </a>
+                    <a href="{{ route('help') }}"
+                       class="block px-3 py-2 rounded-md text-sm text-slate-200 hover:bg-slate-800
+                              {{ request()->routeIs('help') ? 'bg-slate-800 text-white' : '' }}">
+                        使用說明
                     </a>
                 </div>
             </div>

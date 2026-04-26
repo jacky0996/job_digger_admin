@@ -11,3 +11,5 @@ Route::resource('search-configs', SearchConfigController::class)
 
 Route::get('/vacancies/search', [VacancySearchController::class, 'index'])
     ->name('vacancies.search');
+
+Route::view('/help', 'help')->name('help');
