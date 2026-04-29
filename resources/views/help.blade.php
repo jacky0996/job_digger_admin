@@ -139,7 +139,7 @@
                     <li class="flex gap-2"><span class="text-slate-400">·</span><span>從下拉選單挑選關鍵字，按「<strong>搜尋</strong>」即列出對應的職缺。</span></li>
                     <li class="flex gap-2"><span class="text-slate-400">·</span><span>每頁 30 筆，可分頁瀏覽。網址帶 <code class="px-1 bg-slate-100 rounded text-xs">?keyword=xxx&page=N</code>，可直接分享。</span></li>
                     <li class="flex gap-2"><span class="text-slate-400">·</span><span>點「<strong>職缺職稱</strong>」或「<strong>公司</strong>」會在新分頁開啟 104 原始頁面。</span></li>
-                    <li class="flex gap-2"><span class="text-slate-400">·</span><span>「<strong>更新資料</strong>」按鈕：尚未實作，未來會接到 Python 爬蟲服務以重新抓取。</span></li>
+                    <li class="flex gap-2"><span class="text-slate-400">·</span><span>「<strong>更新資料</strong>」按鈕：點擊後會呼叫 Python API，針對所選關鍵字啟動背景爬蟲任務。</span></li>
                 </ul>
 
                 <h3 class="mt-5 text-sm font-semibold text-slate-900">表格欄位</h3>
@@ -201,8 +201,8 @@
                         <p class="mt-1 text-slate-700 leading-7">A. 下拉選項來自「關鍵字設定」表內的 <code class="px-1 bg-slate-100 rounded text-xs">keyword</code> 欄位；要新增請先到關鍵字設定頁建立。</p>
                     </div>
                     <div>
-                        <p class="font-medium text-slate-900">Q. 「更新資料」按鈕為什麼按了沒反應？</p>
-                        <p class="mt-1 text-slate-700 leading-7">A. 該功能還沒接上爬蟲 API。目前會顯示「尚未實作」提示，等 API 接好後才能觸發重抓。</p>
+                        <p class="font-medium text-slate-900">Q. 「更新資料」按鈕的功能是什麼？</p>
+                        <p class="mt-1 text-slate-700 leading-7">A. 此功能會直接呼叫 Python 端 (Port 83) 的 API，並將該關鍵字的 ID 送出。Python 服務接收後會立即在背景啟動完整的抓取與清洗流程 (Stage A, C, B)。</p>
                     </div>
                     <div>
                         <p class="font-medium text-slate-900">Q. 刪除關鍵字會不會連帶刪除已抓的職缺？</p>
