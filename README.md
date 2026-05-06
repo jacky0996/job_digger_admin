@@ -1,131 +1,60 @@
 # Job Digger Admin
 
-Laravel 11 後台，搭配 [`job-digger`](../job-digger) Python 爬蟲服務使用。
-本專案只負責「設定關鍵字」與「檢視抓回的職缺」，不執行爬取。
+Laravel 11 後台,搭配 [`job-digger`](../job-digger) Python 爬蟲服務。**本專案只負責「設定關鍵字」與「檢視抓回的職缺」,不執行爬取**。整合 [Middle Platform](../Middle_Platform) SSO(Web Mode),使用者必須先通過中台登入才能進入。
 
-終端使用者文件請見系統內建的 `/help` 頁面；本檔僅給工程師看。
+> ▸ **想直接跑起來** → 看 [docs/deployment.md](./docs/deployment.md)(`docker compose up -d --build`,host port 8084)
+> ▸ **想懂為什麼做** → 看 [docs/overview.md](./docs/overview.md)(系統定位、Stakeholders、Scope)
+> ▸ **想理解 SSO 整合** → 看 [docs/sequence-diagrams.md](./docs/sequence-diagrams.md) 第 1 節 + [adr/0001-sso-web-mode.md](./docs/adr/0001-sso-web-mode.md)
+> ▸ **想學怎麼操作** → 看 [docs/user-guide.md](./docs/user-guide.md)
+> ▸ **想知道為什麼 APP_KEY 跟 SSO_JWT_SECRET 拆開** → 看 [adr/0003-app-key-vs-jwt-secret.md](./docs/adr/0003-app-key-vs-jwt-secret.md)(踩過的雷)
 
----
-
-## 系統關係
-
-```
-                  ┌──────────────────────┐
-                  │  Job Digger Admin    │   ← 本專案 (Laravel 11)
-                  │  (PHP 8.3 / Tailwind)│
-                  └──────────┬───────────┘
-                             │ read / write
-                             ▼
-        ┌────────────────────────────────────────┐
-        │  MariaDB  (job-digger 提供, port 3308) │
-        │  - search_configs                      │
-        │  - vacancies                           │
-        └────────────────────────────────────────┘
-                             ▲
-                             │ scrape / clean / write
-                  ┌──────────┴───────────┐
-                  │  job-digger (Python) │   ← 另一個專案
-                  │  FastAPI :8000       │
-                  └──────────────────────┘
-```
-
-DB 由 `job-digger` 的 `docker-compose` 啟動，本專案只是 client，**不擁有 schema、不跑 migration**。
+技術棧:PHP 8.2 / Laravel 11 / MariaDB(共用 job-digger 的 DB)/ Tailwind / Nginx + PHP-FPM(Docker)/ Firebase JWT(SSO 驗證)。
 
 ---
 
-## 共用資料表
+## SA 文件索引
 
-| 表 | 用途 | 本專案的存取 |
-| --- | --- | --- |
-| `search_configs` | 搜尋關鍵字 + 清洗用過濾標籤 | 全 CRUD |
-| `vacancies` | 爬回的職缺主表 | 唯讀 (依 keyword 列表) |
+本專案以 SA 視角整理文件,給三類讀者使用:
 
-Schema 主檔在 [`../job-digger/init.sql`](../job-digger/init.sql)；本專案沒有 migration。
+- **End User(我自己 / 行銷人員)** — 想知道怎麼用後台設關鍵字、看職缺
+- **開發者 / SA / Architect** — 想知道架構、SSO 整合機制
+- **未來維護者** — 想知道某個技術決策當初的取捨
 
----
-
-## 環境需求
-
-- PHP 8.3+ / Composer 2.x
-- Node 20+ / npm
-- MariaDB 10+ (透過 `job-digger` 的 docker-compose 啟動於 `127.0.0.1:3308`)
+文件採 Markdown + Mermaid 撰寫,GitHub 直接渲染,不需要任何工具即可閱讀。
 
 ---
 
-## 本地啟動
+## 推薦閱讀順序
 
-```bash
-# 1. 安裝依賴
-composer install
-npm install
-
-# 2. 設定 .env (DB 區塊已預先指向 job-digger 的 docker DB)
-cp .env.example .env   # 首次才需要
-php artisan key:generate
-
-# 3. 確認 job-digger 的 DB container 在跑
-docker ps | grep job_digger_db   # 應該看到 0.0.0.0:3308->3306
-
-# 4. 跑起來
-npm run build           # 或 npm run dev (CSS/JS 熱更新)
-php artisan serve --port=8088
-```
-
-開瀏覽器 http://127.0.0.1:8088 。
+| # | 文件 | 給誰看 | 對應 UML 圖 |
+|---|---|---|---|
+| 1 | [docs/overview.md](./docs/overview.md) | 所有人 | — (純文字:定位 / Scope / Stakeholders) |
+| 2 | [docs/architecture.md](./docs/architecture.md) | 開發者 / Architect | **Component Diagram** + **Class Diagram**(MVC + Repository 分層 + SSO middleware) |
+| 3 | [docs/data-model.md](./docs/data-model.md) | 開發者 / DBA | **ERD**(共用表 + 自有 users 表) |
+| 4 | [docs/sequence-diagrams.md](./docs/sequence-diagrams.md) | SA / 開發者 | **Sequence Diagram**(SSO callback / 觸發爬蟲 / 列表查詢) |
+| 5 | [docs/deployment.md](./docs/deployment.md) | Ops / Architect | **Deployment Diagram**(nginx + php-fpm + 連 host MariaDB) |
+| 6 | [docs/user-guide.md](./docs/user-guide.md) | End User | — (操作手冊,非 UML) |
+| 7 | [docs/adr/](./docs/adr/) | 後續維護者 | — (Architecture Decision Records) |
 
 ---
 
-## `.env` 重點欄位
+## 不同角色的入口建議
 
-```env
-DB_CONNECTION=mariadb
-DB_HOST=127.0.0.1
-DB_PORT=3308
-DB_DATABASE=job_digger
-DB_USERNAME=digger_user
-DB_PASSWORD=digger_pass_456
-
-# 不要改成 database driver — 本專案不擁有 sessions / cache / jobs 表
-SESSION_DRIVER=file
-CACHE_STORE=file
-QUEUE_CONNECTION=sync
-```
+| 你是誰 | 從這裡開始 |
+|---|---|
+| **第一次來** | `docs/overview.md` → `docs/architecture.md` → `docs/sequence-diagrams.md` |
+| **要 review 設計** | `docs/architecture.md` → `docs/data-model.md` → `docs/adr/` |
+| **要 debug SSO** | `docs/sequence-diagrams.md` 第 1 節 → `adr/0001-sso-web-mode.md` → `adr/0003-app-key-vs-jwt-secret.md` |
+| **要部署 / 維運** | `docs/deployment.md` |
+| **要查 DB schema** | `docs/data-model.md` |
+| **要學系統操作** | `docs/user-guide.md` 或 `/help` 頁(系統內) |
 
 ---
 
-## 專案重點檔案
+## 文件公約
 
-```
-app/
-├── Http/Controllers/
-│   ├── SearchConfigController.php   # 關鍵字 CRUD
-│   └── VacancySearchController.php  # 職缺搜尋 + 分頁
-├── Models/
-│   ├── SearchConfig.php             # search_configs (CRUD)
-│   └── Vacancy.php                  # vacancies (唯讀)
-└── Providers/AppServiceProvider.php # Paginator::useTailwind()
-
-resources/views/
-├── layouts/app.blade.php            # 共用 layout (Tailwind + Alpine 行動選單)
-├── search_configs/                  # 關鍵字 CRUD 頁面
-├── vacancies/search.blade.php       # 職缺搜尋頁
-└── help.blade.php                   # 終端使用者文件 (/help)
-
-routes/web.php                       # 全部路由 (3 個 group)
-```
-
----
-
-## 已知 TODO
-
-- 職缺搜尋頁的「**更新資料**」按鈕目前是 stub，會跳 alert「尚未實作」。
-  接 `job-digger` 的 FastAPI (預設 `http://localhost:8000`) 後即可重抓特定關鍵字。
-- 沒有登入機制 — 預設以「內網 / 信任環境」執行；要對外開放需自行加上認證。
-
----
-
-## 不會做的事
-
-- **不跑 migration**：schema 由 `job-digger` 維護。本專案的 `database/migrations/` 已清空。
-- **不寫 `vacancies`**：只讀。寫入是 Python 爬蟲的責任。
-- **不存 session / cache 到資料庫**：避免汙染共用 DB；改用檔案驅動。
+- **圖優於文字**:盡量用 Mermaid 畫圖,文字補關鍵說明
+- **每份文件 < 5 分鐘看完**:超過就拆檔
+- **變更 code 時同步更新**:文件與 code 同 repo,改 middleware 就改 `architecture.md`,改 SSO 流程就改 `sequence-diagrams.md`
+- **決策必留 ADR**:任何「為什麼選 A 不選 B」的判斷,新增一份 ADR
+- **與生態系對齊**:本系統是 [Middle Platform](../Middle_Platform) + [job-digger](../job-digger) 生態的一份子,SA 文件結構與術語(Actor / IdP / SP / ADR)刻意跨 repo 一致
