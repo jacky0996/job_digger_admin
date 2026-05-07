@@ -59,6 +59,8 @@ class VacancySearchController extends Controller
             'selectedCheckType' => $selectedCheckType,
             'vacancies'         => $vacancies,
             'totalCount'        => $totalCount,
+            // 給前端 JS 用 — 瀏覽器要打的 Python API 入口
+            'apiUrl'            => rtrim(config('services.job_digger.url'), '/'),
         ]);
     }
 }

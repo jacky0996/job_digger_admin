@@ -6,12 +6,13 @@ use App\Http\Controllers\VacancySearchController;
 use App\Http\Middleware\AuthorizeJwtSso;
 use Illuminate\Support\Facades\Route;
 
-// SSO 公開路由(不可被 SSO middleware 攔,避免無窮 redirect)
-Route::get('/sso/callback', [SsoController::class, 'callback'])->name('sso.callback');
+// 登出 — 必須公開,避免登出時又被 middleware 反踢回中台
 Route::match(['get', 'post'], '/sso/logout', [SsoController::class, 'logout'])->name('sso.logout');
 
-// 業務路由 — 全部走 SSO middleware 保護
+// SSO 受保護路由 — callback 也要走 middleware 才能驗 token + Auth::login
 Route::middleware([AuthorizeJwtSso::class])->group(function () {
+    Route::get('/sso/callback', [SsoController::class, 'callback'])->name('sso.callback');
+
     Route::redirect('/', '/search-configs');
 
     Route::resource('search-configs', SearchConfigController::class)

@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // job-digger Python FastAPI(Stage A/B/C 爬蟲觸發)
+    // 瀏覽器直接打 — 故必須是「使用者瀏覽器看得到的 URL」,而非容器網路內的 host。
+    'job_digger' => [
+        'url' => env('JOB_DIGGER_API_URL', 'http://localhost:85'),
+    ],
+
 ];

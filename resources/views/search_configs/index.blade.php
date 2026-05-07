@@ -37,8 +37,11 @@
                                         <span class="text-xs text-slate-400">無過濾標籤</span>
                                     @endforelse
                                 </div>
-                                <div class="mt-2 text-xs text-slate-400">
-                                    {{ optional($config->created_at)->format('Y-m-d H:i') ?? '—' }}
+                                <div class="mt-2 text-xs text-slate-400 space-y-0.5">
+                                    <div>建立 {{ optional($config->created_at)->format('Y-m-d H:i') ?? '—' }} · {{ $config->created_by_email ?? '—' }}</div>
+                                    @if ($config->updated_at)
+                                        <div>更新 {{ $config->updated_at->format('Y-m-d H:i') }} · {{ $config->updated_by_email ?? '—' }}</div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -71,7 +74,7 @@
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-16">ID</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-48">搜尋關鍵字</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">過濾標籤 (清洗用)</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-44">建立時間</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-56">建立 / 更新</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-40">操作</th>
                         </tr>
                     </thead>
@@ -89,8 +92,19 @@
                                         @endforelse
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">
-                                    {{ optional($config->created_at)->format('Y-m-d H:i') ?? '—' }}
+                                <td class="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                                    <div>
+                                        <span class="text-slate-400">建立</span>
+                                        {{ optional($config->created_at)->format('Y-m-d H:i') ?? '—' }}
+                                        <div class="text-slate-400 truncate max-w-[14rem]">{{ $config->created_by_email ?? '—' }}</div>
+                                    </div>
+                                    @if ($config->updated_at)
+                                        <div class="mt-1 pt-1 border-t border-slate-100">
+                                            <span class="text-slate-400">更新</span>
+                                            {{ $config->updated_at->format('Y-m-d H:i') }}
+                                            <div class="text-slate-400 truncate max-w-[14rem]">{{ $config->updated_by_email ?? '—' }}</div>
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-3 text-sm">
                                     <div class="flex gap-2">

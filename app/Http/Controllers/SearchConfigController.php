@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SearchConfig;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class SearchConfigController extends Controller
@@ -23,10 +24,12 @@ class SearchConfigController extends Controller
     public function store(Request $request)
     {
         $data = $this->validateInput($request);
+        $email = Auth::user()?->email;
 
         SearchConfig::create([
-            'keyword'     => $data['keyword'],
-            'filter_tags' => SearchConfig::normalizeFilterTags($data['filter_tags'] ?? null),
+            'keyword'          => $data['keyword'],
+            'filter_tags'      => SearchConfig::normalizeFilterTags($data['filter_tags'] ?? null),
+            'created_by_email' => $email,
         ]);
 
         return redirect()
@@ -44,8 +47,10 @@ class SearchConfigController extends Controller
         $data = $this->validateInput($request, $searchConfig->id);
 
         $searchConfig->update([
-            'keyword'     => $data['keyword'],
-            'filter_tags' => SearchConfig::normalizeFilterTags($data['filter_tags'] ?? null),
+            'keyword'          => $data['keyword'],
+            'filter_tags'      => SearchConfig::normalizeFilterTags($data['filter_tags'] ?? null),
+            'updated_by_email' => Auth::user()?->email,
+            'updated_at'       => now(),
         ]);
 
         return redirect()

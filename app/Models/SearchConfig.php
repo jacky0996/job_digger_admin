@@ -8,15 +8,21 @@ class SearchConfig extends Model
 {
     protected $table = 'search_configs';
 
+    // 我們手動管 created_at(DB default current_timestamp)+ updated_at(controller 寫),
+    // 不走 Eloquent 自動 timestamps,避免在 store() 時誤覆蓋 DB default。
     public $timestamps = false;
 
     protected $fillable = [
         'keyword',
         'filter_tags',
+        'created_by_email',
+        'updated_by_email',
+        'updated_at',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function getFilterTagsArrayAttribute(): array

@@ -62,6 +62,28 @@
                     </div>
                 </div>
             </form>
+
+            {{-- 爬蟲進度面板 — 啟動 / 進行中 / 完成 / 失敗都顯示在這 --}}
+            <div id="scrape-panel" class="mt-4 hidden">
+                <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0 text-sm text-slate-700 truncate">
+                            <span id="scrape-stage" class="font-medium">準備中</span>
+                            <span id="scrape-counts" class="ml-1 text-slate-500"></span>
+                            <span class="ml-2 text-xs text-slate-400">
+                                已耗時 <span id="scrape-elapsed">--</span>
+                                <span id="scrape-eta-wrap" class="hidden">· 預計剩 <span id="scrape-eta">--</span></span>
+                            </span>
+                        </div>
+                        <button id="scrape-dismiss" type="button" class="text-slate-400 hover:text-slate-600 text-lg leading-none px-1">×</button>
+                    </div>
+                    <div class="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div id="scrape-progress-fill" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div id="scrape-error" class="hidden mt-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2 break-all"></div>
+                <div id="scrape-done" class="hidden mt-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2"></div>
+            </div>
         </div>
 
         @if ($selectedKeyword)
@@ -255,51 +277,167 @@
 @endsection
 
 <script>
-    // 初始化：頁面載入時檢查一次狀態
+    const API_URL = `{{ $apiUrl }}`;
+    const STAGE_LABELS = {
+        'init': '準備中',
+        'A': 'Stage A · 清單採集',
+        'C': 'Stage C · 內文過濾',
+        'B': 'Stage B · 公司資料補全',
+        'done': '✅ 已完成',
+        'failed': '❌ 失敗',
+    };
+
+    let pollTimer = null;
+    let lastShownStage = null;
+
     document.addEventListener('DOMContentLoaded', () => {
-        checkScrapeStatus();
+        document.getElementById('scrape-dismiss')?.addEventListener('click', hidePanel);
+        startPollingForCurrentSelection();
     });
 
-    /**
-     * 檢查當前選擇的關鍵字是否正在抓取中
-     */
-    async function checkScrapeStatus() {
+    function startPollingForCurrentSelection() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollOnce();
+        pollTimer = setInterval(pollOnce, 3000);
+    }
+
+    function checkScrapeStatus() {
+        // keyword 下拉變動時:重置面板,改用新 configId 重啟 polling
+        hidePanel();
+        lastShownStage = null;
+        startPollingForCurrentSelection();
+    }
+
+    function getCurrentConfigId() {
         const select = document.getElementById('keyword');
-        if (!select) return;
+        if (!select) return null;
+        const opt = select.options[select.selectedIndex];
+        return opt ? opt.getAttribute('data-config-id') : null;
+    }
 
-        const selectedOption = select.options[select.selectedIndex];
-        const configId = selectedOption ? selectedOption.getAttribute('data-config-id') : null;
+    async function pollOnce() {
+        const configId = getCurrentConfigId();
         const btn = document.getElementById('btn-scrape');
-
         if (!configId || !btn) {
-            if (btn) setBtnState(btn, 'normal');
+            setBtnState(btn, 'normal');
             return;
         }
 
         try {
-            const response = await fetch(`http://localhost:83/api/scrape/status/${configId}`);
-            const data = await response.json();
-
-            if (data.is_running) {
-                setBtnState(btn, 'running');
-            } else {
-                setBtnState(btn, 'normal');
-            }
-        } catch (error) {
-            console.warn('無法檢查任務狀態:', error);
+            const r = await fetch(`${API_URL}/api/scrape/status/${configId}`);
+            const data = await r.json();
+            renderStatus(data, btn);
+        } catch (err) {
+            console.warn('無法檢查任務狀態:', err);
             setBtnState(btn, 'normal');
         }
     }
 
-    /**
-     * 設定按鈕外觀與狀態
-     */
+    function renderStatus(data, btn) {
+        const stage = data.stage;
+
+        // 沒任何狀態 → 收掉面板,按鈕回正常
+        if (!stage) {
+            setBtnState(btn, 'normal');
+            return;
+        }
+
+        // 進行中
+        if (data.is_running) {
+            setBtnState(btn, 'running');
+            showProgress(data);
+            lastShownStage = stage;
+            return;
+        }
+
+        // 結束(done / failed)— 顯示一次完成訊息,然後讓使用者手動關掉(或 30s 自動收)
+        setBtnState(btn, 'normal');
+        if (lastShownStage !== stage) {
+            // stage 從 running 跳到 done/failed,觸發完成顯示
+            showCompletion(data);
+            lastShownStage = stage;
+        }
+    }
+
+    function showProgress(data) {
+        const panel = document.getElementById('scrape-panel');
+        panel.classList.remove('hidden');
+
+        document.getElementById('scrape-stage').textContent = STAGE_LABELS[data.stage] || data.stage;
+        document.getElementById('scrape-counts').textContent =
+            data.total > 0 ? `· ${data.current}/${data.total}` : '';
+
+        document.getElementById('scrape-elapsed').textContent = formatDuration(data.elapsed_sec);
+        const etaWrap = document.getElementById('scrape-eta-wrap');
+        if (data.eta_sec != null) {
+            etaWrap.classList.remove('hidden');
+            document.getElementById('scrape-eta').textContent = formatDuration(data.eta_sec);
+        } else {
+            etaWrap.classList.add('hidden');
+        }
+
+        const fill = document.getElementById('scrape-progress-fill');
+        const pct = data.total > 0 ? Math.min(100, (data.current / data.total) * 100) : 0;
+        fill.style.width = pct + '%';
+        fill.classList.remove('bg-rose-500', 'bg-emerald-500');
+        fill.classList.add('bg-blue-500');
+
+        document.getElementById('scrape-error').classList.add('hidden');
+        document.getElementById('scrape-done').classList.add('hidden');
+    }
+
+    function showCompletion(data) {
+        const panel = document.getElementById('scrape-panel');
+        panel.classList.remove('hidden');
+        document.getElementById('scrape-stage').textContent = STAGE_LABELS[data.stage] || data.stage;
+        document.getElementById('scrape-counts').textContent = '';
+        document.getElementById('scrape-elapsed').textContent = formatDuration(data.elapsed_sec);
+        document.getElementById('scrape-eta-wrap').classList.add('hidden');
+
+        const fill = document.getElementById('scrape-progress-fill');
+        fill.style.width = '100%';
+        fill.classList.remove('bg-blue-500');
+
+        if (data.stage === 'failed') {
+            fill.classList.add('bg-rose-500');
+            const err = document.getElementById('scrape-error');
+            err.textContent = '錯誤訊息:' + (data.error || '未知');
+            err.classList.remove('hidden');
+            document.getElementById('scrape-done').classList.add('hidden');
+        } else {
+            fill.classList.add('bg-emerald-500');
+            const done = document.getElementById('scrape-done');
+            done.textContent = `✅ 任務完成,共耗時 ${formatDuration(data.elapsed_sec)}。重新搜尋可看到最新結果。`;
+            done.classList.remove('hidden');
+            document.getElementById('scrape-error').classList.add('hidden');
+            // done 30s 後自動收
+            setTimeout(() => {
+                if (document.getElementById('scrape-stage').textContent.includes('已完成')) {
+                    hidePanel();
+                }
+            }, 30000);
+        }
+    }
+
+    function hidePanel() {
+        document.getElementById('scrape-panel').classList.add('hidden');
+    }
+
+    function formatDuration(sec) {
+        if (sec == null || isNaN(sec)) return '--';
+        if (sec < 60) return `${sec} 秒`;
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return s > 0 ? `${m} 分 ${s} 秒` : `${m} 分`;
+    }
+
     function setBtnState(btn, state) {
+        if (!btn) return;
         if (state === 'running') {
             btn.disabled = true;
             btn.classList.add('opacity-70', 'cursor-not-allowed', 'bg-slate-50', 'text-slate-500');
             btn.classList.remove('text-slate-700', 'hover:bg-slate-50');
-            btn.innerHTML = `<span>更新任務執行中</span>`;
+            btn.innerHTML = `<span>執行中…</span>`;
         } else {
             btn.disabled = false;
             btn.classList.remove('opacity-70', 'cursor-not-allowed', 'bg-slate-50', 'text-slate-500');
@@ -309,51 +447,39 @@
     }
 
     function triggerScrape(event) {
+        const configId = getCurrentConfigId();
         const select = document.getElementById('keyword');
-        const selectedOption = select.options[select.selectedIndex];
-        const configId = selectedOption.getAttribute('data-config-id');
-        const keyword = selectedOption.value;
+        const keyword = select?.options[select.selectedIndex]?.value;
 
         if (!configId || !keyword) {
             alert('請先選擇關鍵字');
             return;
         }
-
-        if (!confirm(`確定要針對「${keyword}」啟動資料抓取任務嗎？\n這將在背景執行 Stage A, C, B 流程。`)) {
+        if (!confirm(`確定要針對「${keyword}」啟動資料抓取任務嗎？\n背景執行 Stage A → C → B,可離開此頁,進度會繼續更新。`)) {
             return;
         }
 
         const btn = event.currentTarget;
-        const originalContent = btn.innerHTML;
+        setBtnState(btn, 'running');
 
-        // 立即進入啟動中狀態
-        btn.disabled = true;
-        btn.classList.add('opacity-70', 'cursor-not-allowed', 'bg-slate-50', 'text-slate-500');
-        btn.classList.remove('text-slate-700', 'hover:bg-slate-50');
-        btn.innerHTML = `<span>啟動中...</span>`;
-
-        fetch(`http://localhost:83/api/scrape/${configId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
-            })
-            .then(async response => {
-                const data = await response.json();
-                if (response.ok) {
-                    alert('✅ 任務已成功啟動！\n' + (data.message || '請稍候片刻再重新搜尋查看結果。'));
-                    // 啟動成功後立即更新按鈕狀態為「已有任務」
-                    setBtnState(btn, 'running');
-                } else {
-                    alert('❌ 啟動失敗：' + (data.detail || data.message || '未知錯誤'));
-                    setBtnState(btn, 'normal');
-                }
-            })
-            .catch(error => {
-                console.error('Fetch error:', error);
-                alert('❌ 無法連線至爬蟲服務 (http://localhost:83)。\n請確認 Python API 是否已啟動。');
+        fetch(`${API_URL}/api/scrape/${configId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        })
+        .then(async r => {
+            const data = await r.json();
+            if (r.ok) {
+                lastShownStage = 'init';  // 防止結束時誤判 stage transition
+                pollOnce();  // 立刻拉一次,不用等 3 秒
+            } else {
+                alert('❌ 啟動失敗:' + (data.detail || data.message || '未知錯誤'));
                 setBtnState(btn, 'normal');
-            });
+            }
+        })
+        .catch(err => {
+            console.error('Fetch error:', err);
+            alert(`❌ 無法連線至爬蟲服務 (${API_URL})。\n請確認 Python API 是否已啟動。`);
+            setBtnState(btn, 'normal');
+        });
     }
 </script>
