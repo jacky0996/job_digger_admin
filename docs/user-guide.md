@@ -92,14 +92,36 @@ Job Digger Admin (你看不到內容)
 - **編輯**會立即生效 — 下次跑爬蟲就用新關鍵字
 - **刪除**會永久移除 search_config(沒有 soft delete),但**已抓回的 vacancies 不受影響**(它們有自己的 `keyword` 欄位 snapshot)
 
-### 3.4 (Roadmap)執行爬蟲
+### 3.4 執行爬蟲(更新)
 
-每筆右側未來會有「**執行**」按鈕,點下去:
-- 系統會呼叫 job-digger FastAPI(`http://localhost:85`)
-- 觸發背景爬蟲(三階段:list / content / company)
-- **不會立即看到結果** — 爬蟲跑完通常 5-30 分鐘,要去職缺搜尋頁刷新
+每筆右側根據關鍵字「建立日期」決定操作:
 
-> 目前(2026 Q2)此按鈕是 **stub**,會跳 alert「尚未實作」。要手動跑爬蟲請見 [job-digger README](../../job-digger/README.md)。
+| 情況 | 看到什麼 | 行為 |
+|---|---|---|
+| **今日剛建立的 keyword** | 綠色「**更新**」按鈕 | 點下去會跳 ETL 提示 → 確定 → 觸發 job-digger 爬蟲 |
+| **過往 keyword** | 「**由排程執行**」灰底標籤 | **不能手動觸發**,每天 03:00 會由排程自動更新 |
+
+#### 點「更新」會發生什麼
+
+1. 跳出 confirm 視窗:「⚠️ 資料 ETL 提醒,預計 30~60 分鐘...」
+2. 你按「確定」之後:
+   - 系統呼叫 job-digger FastAPI(`http://localhost:85`)
+   - 觸發背景爬蟲(三階段:list / content filter / company info)
+   - 按鈕變成「啟動中...」並 disable
+   - 收到 ✅ 提示:「已開始,任務在背景執行」
+3. **不會立即看到結果** — 爬蟲跑完通常 30~60 分鐘
+4. 你可以離開這頁去做別的,稍後重新整理列表頁可以看到「**最後爬蟲**」欄位的時間更新
+
+#### 為什麼過往 keyword 不能手動觸發
+
+- 一個 keyword 完整跑完約 30~60 分鐘,**讓你在前台等不切實際**
+- job-digger 後端**全域只允許一個 keyword 同時跑**(避免多隻 Chromium 把 RAM 跟 CPU 吃光),所以排程會序列化處理
+- 後端有守衛檢查 — 即使你想用 curl 繞過,API 會回 `HTTP 403`
+- 排程每天 **03:00** 自動跑,優先處理「最久沒更新」的 keyword
+
+#### 「最後爬蟲」欄位
+
+列表的「**最後爬蟲**」顯示的是 **`last_scraped_at`** 欄位 — 上次成功完整跑完(A→B→C 三階段)的時間。如果失敗中斷不會更新這個時間,所以你看到的時間永遠代表「上次拿到完整資料是多久以前」。
 
 ---
 
@@ -114,7 +136,7 @@ Job Digger Admin (你看不到內容)
 - **Title**(職缺標題)
 - **Company**(公司名稱)+ 連到 104 公司頁的連結
 - **Salary**(原始薪資文字)
-- **Capital / Employee Count**(公司資本額 / 員工數,Stage B 補進來的)
+- **Capital / Employee Count**(公司資本額 / 員工數,Stage C 補進來的)
 - **Keyword**(對應的搜尋字,看是哪次爬蟲抓的)
 - **Check Type**(過濾分類)
 - **Job Link**(連到 104 職缺頁)
@@ -130,7 +152,7 @@ Job Digger Admin (你看不到內容)
 
 - **職缺是唯讀的** — Admin 不能在 UI 改職缺資料(那是 job-digger 的責任)
 - **重複職缺不會出現兩次** — `job_link` 是 unique,job-digger 用 UPSERT
-- **職缺可能變舊** — 沒有自動更新,得手動跑爬蟲
+- **職缺可能變舊** — 排程每天 03:00 自動更新所有非今日 keyword;當天剛建的 keyword 你也可以從關鍵字列表頁手動點「更新」
 
 ---
 
@@ -162,48 +184,75 @@ A: **可以**,Laravel session 會共享。但避免兩個分頁同時編輯**同
 
 ### Q4: 為什麼有些 vacancies 的 Capital / Employee Count 是空的?
 
-A: 那些是**剛抓回但還沒跑 Stage B(公司資料補完)**。下次 job-digger 跑爬蟲時 Stage B 會補進去。
+A: 那些是**剛抓回但還沒跑 Stage C(公司資料補完)**。下次 job-digger 跑爬蟲時 Stage C 會補進去。
 
 ### Q5: 為什麼我登入時跳到一個叫「Middle Platform」的網頁?
 
 A: 那是**集中式登入服務**(SSO)。Middle Platform / EDM / Job Digger Admin 共用同一個登入,你只要登一次就能進所有系統。詳見中台的 [overview.md](../../Middle_Platform/docs/overview.md)。
 
-### Q6: 我看不到「執行爬蟲」按鈕?
+### Q6: 我看不到「更新」按鈕?
 
-A: 因為**還沒做** — 目前要跑爬蟲只能手動進 job-digger 容器或打 FastAPI:
-```bash
-curl -X POST http://localhost:85/api/scrape/1
-# 1 是 search_config 的 id
-```
+A: 因為這個 keyword **不是今日建立的**。系統規則是:
+- **今日建立** → 看到綠色「更新」按鈕,可以手動觸發
+- **過往 keyword** → 顯示「由排程執行」,每天 03:00 自動跑
+
+如果非要立刻跑某個過往 keyword,有兩種方式(僅限維運自己用,不是日常操作):
+1. 在 admin 容器手動執行:`docker exec -it job_digger_admin_app php artisan scrape:all-pending` 一次跑掉所有 pending
+2. 直接 curl 後端 API(會被 403 守衛擋下,要先把那筆 `created_at` 改成 today)
+
+### Q7: 排程跑到一半我能停止嗎?
+
+A: 重啟 admin 容器即可:`docker compose restart app`。supervisor 會把 `schedule:work` 跟 ScrapeAllPending 一起停掉。但要注意:**已經發出去給 job-digger 的那筆爬蟲**會繼續在 job-digger 那邊跑完,因為那是 background task,跟 admin 端解耦。要真的停 job-digger 端的話要 `docker compose -f /path/to/job-digger/docker-compose.yml restart`。
 
 ---
 
-## 7. 進階:手動跑爬蟲(暫時用)
+## 7. 進階:維運常用命令
 
-在「執行爬蟲」按鈕做出來之前,觸發爬蟲的方式:
+### 7.1 看排程狀態
 
 ```bash
-# 1. 看你要跑哪個 search_config
+# 確認 supervisor 兩支 process 都活著
+docker exec job_digger_admin_app supervisorctl status
+# 預期:
+#   php-fpm    RUNNING   pid 12, uptime ...
+#   schedule   RUNNING   pid 13, uptime ...
+
+# 看排程清單(Laravel 11)
+docker exec job_digger_admin_app php artisan schedule:list
+
+# 看排程 log(scrape:all-pending 每次跑都會 append)
+docker exec job_digger_admin_app tail -f storage/logs/scrape-all-pending.log
+```
+
+### 7.2 立刻跑一輪排程(不等到 03:00)
+
+```bash
+# Dry-run:只列出會被處理的 keyword,不實際觸發
+docker exec -it job_digger_admin_app php artisan scrape:all-pending --dry-run
+
+# 實際跑(會逐一觸發 + 輪詢,可能跑很久)
+docker exec -it job_digger_admin_app php artisan scrape:all-pending
+```
+
+### 7.3 直接打 job-digger API(繞過 admin)
+
+```bash
+# 看清單
 docker exec job_digger_admin_app php artisan tinker --execute="
   echo App\Models\SearchConfig::all()->map(fn(\$c) => \$c->id . ': ' . \$c->keyword)->implode(\"\n\");
 "
-# 輸出:
-# 1: php
-# 2: 後端工程師
-# ...
 
-# 2. 啟動 id=1 的爬蟲(背景跑)
+# 啟動 id=1 的爬蟲
 curl -X POST http://localhost:85/api/scrape/1
 
-# 3. 看狀態
+# 看狀態
 curl http://localhost:85/api/scrape/status/1
-# {"config_id": 1, "is_running": true}
 
-# 4. 看 log
+# 看 job-digger log
 docker logs -f job_digger_api
 ```
 
-通常 5-30 分鐘跑完,然後回 Admin 的「職缺搜尋」頁刷新就能看到新職缺。
+注意:`POST /api/scrape/{id}` 有 today-only 守衛,只允許「今日建立」的 keyword 通過。
 
 ---
 

@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libzip-dev \
         libonig-dev \
         netcat-openbsd \
+        supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install pdo_mysql mbstring zip pcntl
@@ -29,7 +30,11 @@ COPY . /var/www
 RUN chown -R www-data:www-data /var/www \
     && chmod -R 775 /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
 
-# Entrypoint:wait DB → composer install → migrate → 起 fpm
+# Supervisor:同 container 內同時跑 php-fpm 與 schedule:work
+# 直接覆蓋 main supervisord.conf,讓我們的檔案是唯一的真相來源
+COPY docker-compose/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+
+# Entrypoint:wait DB → composer install → migrate → exec supervisord
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

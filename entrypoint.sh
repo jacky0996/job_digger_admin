@@ -37,5 +37,8 @@ done
 # 6. migrate(只建 users 表給 SSO 用,不動 job-digger 的業務 schema)
 php artisan migrate --force || echo "migrate failed — continuing"
 
-# 7. 啟動 PHP-FPM
-exec php-fpm
+# 7. supervisor log dir
+mkdir -p /var/log/supervisor
+
+# 8. 啟動 supervisor(同時管 php-fpm 與 schedule:work)
+exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf

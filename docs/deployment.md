@@ -35,14 +35,15 @@ flowchart TB
     user -- "http://localhost:8084/" --> nginx
     app -. "Auth: 經 host.docker.internal" .-> mp
     app -- "PDO: host.docker.internal:3308" --> digger_db
-    app -. "(Roadmap) HTTP" .-> digger_api
+    app -- "排程 03:00 觸發爬蟲<br/>POST /api/scrape/{id}" --> digger_api
+    user -. "點「更新」(今日 keyword)<br/>fetch POST /api/scrape/{id}" .-> digger_api
 ```
 
 **重點**
 
 - 三個系統各有自己的 docker-compose,**獨立啟停**
 - Admin 透過 `host.docker.internal` 訪問 host 上的 中台 / job-digger
-- Production 的 admin container 內 **只有 nginx + php-fpm**,沒有 Node、沒有 Composer(已在 build 階段裝好)
+- Production 的 admin container 內 **跑 supervisor**,管 `php-fpm`(web) + `schedule:work`(排程);沒有 Node、沒有 Composer(已在 build 階段裝好)
 
 ---
 
@@ -54,13 +55,31 @@ flowchart TB
 |---|---|---|
 | Base image | `php:8.2-fpm` | [Dockerfile](../Dockerfile) |
 | PHP 擴充 | `pdo_mysql`、`mbstring`、`zip`、`pcntl` | Dockerfile |
-| 系統依賴 | `git`、`curl`、`zip`、`unzip`、`libzip-dev`、`libonig-dev`、`netcat-openbsd` | Dockerfile |
+| 系統依賴 | `git`、`curl`、`zip`、`unzip`、`libzip-dev`、`libonig-dev`、`netcat-openbsd`、**`supervisor`** | Dockerfile |
 | Composer | 從官方 `composer:latest` image COPY 進來 | Dockerfile |
-| Entry | `entrypoint.sh`(設權限 → composer install → wait DB → migrate → 起 fpm) | [entrypoint.sh](../entrypoint.sh) |
+| 主程序 | **`supervisord`(PID 1)**,管理 `php-fpm` 與 `php artisan schedule:work` | [docker-compose/supervisor/supervisord.conf](../docker-compose/supervisor/supervisord.conf) |
+| Entry | `entrypoint.sh`(設權限 → composer install → wait DB → migrate → exec supervisord) | [entrypoint.sh](../entrypoint.sh) |
 | 對外 port | — (內部 9000,nginx fastcgi_pass) | docker-compose |
 | Volume(dev) | `.:/var/www` (bind mount,熱更新) | docker-compose.yml |
-| extra_hosts | `host.docker.internal:host-gateway`(連 host 的 MariaDB / 中台) | docker-compose.yml |
+| extra_hosts | `host.docker.internal:host-gateway`(連 host 的 MariaDB / 中台 / job-digger API) | docker-compose.yml |
 | Restart policy | `unless-stopped` | docker-compose |
+
+#### Supervisor 管理的子程序
+
+| program | 命令 | 角色 |
+|---|---|---|
+| `php-fpm` | `/usr/local/sbin/php-fpm -F` | 接 nginx fastcgi 處理 web 請求 |
+| `schedule` | `php artisan schedule:work` | Laravel 11 內建排程 ticker(取代傳統 cron),每分鐘自動 `schedule:run` |
+
+兩個都設 `autostart=true / autorestart=true`,任一掛掉 supervisor 會立刻重起。`docker stop` 給 supervisord SIGTERM,supervisord 會優雅地把兩個 child 都收掉。
+
+**驗證指令**:
+```bash
+docker exec job_digger_admin_app supervisorctl status
+# 預期:
+#   php-fpm    RUNNING   pid 12, uptime 0:00:05
+#   schedule   RUNNING   pid 13, uptime 0:00:05
+```
 
 ### 2.2 `job_digger_admin_nginx`
 
@@ -89,6 +108,10 @@ flowchart TB
 | `DB_PORT` | MariaDB port | `3308` |
 | `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` | DB 連線 | (跟 job-digger 一致) |
 | `SESSION_DRIVER` / `CACHE_STORE` / `QUEUE_CONNECTION` | 用 file/sync 避免汙染共用 DB | `file` / `file` / `sync` |
+| `JOB_DIGGER_API_URL` | **瀏覽器**用的 job-digger API URL | `http://localhost:85` |
+| `JOB_DIGGER_INTERNAL_URL` | **PHP container 內**用的 job-digger API URL(scheduler / Http::post) | `http://host.docker.internal:85` |
+| `JOB_DIGGER_POLL_INTERVAL` | 排程輪詢任務狀態的間隔(秒) | `30` |
+| `JOB_DIGGER_TASK_TIMEOUT` | 單一 keyword 等待上限(秒),超過視為卡死 | `7200` |
 
 > **`APP_KEY` 跟 `SSO_JWT_SECRET` 的差別**:
 > - `APP_KEY` 是 Laravel 內部用,**Laravel 強制要求 32 bytes**(AES-256-CBC),格式 `base64:<32-byte>`
@@ -128,7 +151,8 @@ docker compose up -d --build
 4. 若 `APP_KEY` 為空就 `key:generate`
 5. `nc -z host.docker.internal 3308` 等 DB 起來
 6. `php artisan migrate --force`(只建 `users` 表)
-7. 啟 PHP-FPM
+7. 建立 `/var/log/supervisor` 目錄
+8. **`exec /usr/bin/supervisord`**(同時拉起 php-fpm 與 schedule:work)
 
 ### 4.2 訪問
 
@@ -201,6 +225,9 @@ server {
 | App 容器 | `docker exec job_digger_admin_app php -v` | PHP 8.2.x |
 | DB 連得到 | `docker exec job_digger_admin_app nc -zv host.docker.internal 3308` | open |
 | Laravel config OK | `docker exec job_digger_admin_app php artisan tinker --execute="echo config('sso.jwt_secret');"` | 跟中台 SECRET_KEY 一樣 |
+| **Supervisor 兩隻都活著** | `docker exec job_digger_admin_app supervisorctl status` | `php-fpm` + `schedule` 都 RUNNING |
+| **排程已註冊** | `docker exec job_digger_admin_app php artisan schedule:list` | 看到 `scrape:all-pending` ... `Daily at 03:00` |
+| **能打到 job-digger** | `docker exec job_digger_admin_app curl -s http://host.docker.internal:85/health` | `{"status":"ok"}` |
 
 > 整體 alive 看 **302** 才正確 — 200 反而異常(代表 SSO middleware 沒套到)。
 
@@ -226,6 +253,17 @@ docker exec job_digger_admin_app tail -50 /var/www/storage/logs/laravel.log
 
 # nginx log
 docker logs -f job_digger_admin_nginx
+
+# Supervisor 管理(看 status / 重啟單一程序而不是整個 container)
+docker exec job_digger_admin_app supervisorctl status
+docker exec job_digger_admin_app supervisorctl restart schedule
+docker exec job_digger_admin_app supervisorctl restart php-fpm
+
+# 排程相關
+docker exec job_digger_admin_app php artisan schedule:list                     # 看排程清單
+docker exec job_digger_admin_app php artisan scrape:all-pending --dry-run      # dry run
+docker exec job_digger_admin_app php artisan scrape:all-pending                # 立刻跑
+docker exec job_digger_admin_app tail -f storage/logs/scrape-all-pending.log   # 看排程歷史
 
 # 進 MariaDB(共用 job-digger 的)
 docker exec -it job_digger_db mariadb -udeveloper -p job_digger

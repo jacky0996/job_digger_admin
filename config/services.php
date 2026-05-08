@@ -36,9 +36,14 @@ return [
     ],
 
     // job-digger Python FastAPI(Stage A/B/C 爬蟲觸發)
-    // 瀏覽器直接打 — 故必須是「使用者瀏覽器看得到的 URL」,而非容器網路內的 host。
+    // - url:給瀏覽器用(使用者前台手動觸發 fetch),host POV
+    // - internal_url:給後端 PHP 用(scheduler / Http::post),從 admin container 看
+    //   要走 host.docker.internal 才能打到 host 上的 uvicorn:85
     'job_digger' => [
-        'url' => env('JOB_DIGGER_API_URL', 'http://localhost:85'),
+        'url'           => env('JOB_DIGGER_API_URL', 'http://localhost:85'),
+        'internal_url'  => env('JOB_DIGGER_INTERNAL_URL', 'http://host.docker.internal:85'),
+        'poll_interval' => (int) env('JOB_DIGGER_POLL_INTERVAL', 30),
+        'task_timeout'  => (int) env('JOB_DIGGER_TASK_TIMEOUT', 7200),
     ],
 
 ];

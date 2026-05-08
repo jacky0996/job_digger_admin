@@ -23,14 +23,14 @@ flowchart TB
     subgraph compose["docker-compose (admin-net)"]
         direction TB
         nginx["📦 job_digger_admin_nginx<br/>nginx:alpine<br/>:8084 → :80"]
-        app["📦 job_digger_admin_app<br/>php:8.2-fpm :9000<br/>volume: ./:/var/www"]
+        app["📦 job_digger_admin_app<br/>php:8.2-fpm + supervisor :9000<br/>↳ php-fpm (web)<br/>↳ schedule:work (排程)"]
         nginx -- "fastcgi_pass app:9000" --> app
     end
 
     subgraph external["外部依賴(host 上其他 compose)"]
         mp["🔐 Middle Platform :80<br/>(SSO IdP)"]
         digger_db[("🗄 job_digger_db :3308<br/>(MariaDB,共用)")]
-        digger_api["⛏ job_digger_api :85<br/>(Roadmap)"]
+        digger_api["⛏ job_digger_api :85<br/>(FastAPI,觸發爬蟲)"]
     end
 
     user -- "1. http://localhost:8084/" --> nginx
@@ -39,7 +39,8 @@ flowchart TB
     mp -. "4. 簽 JWT redirect 回 /sso/callback" .-> user
     user -- "5. /sso/callback?token=..." --> nginx
     app -- "PDO via host.docker.internal:3308" --> digger_db
-    app -. "(Roadmap) HTTP POST" .-> digger_api
+    user -- "6. 點「更新」(今日 keyword)" --> digger_api
+    app -. "7. 排程 03:00 逐一觸發<br/>via host.docker.internal:85" .-> digger_api
 ```
 
 **容器規格**
@@ -243,9 +244,31 @@ flowchart TD
 |---|---|---|
 | SSO 進站 / 驗 JWT | 中台 | 瀏覽器 redirect + URL `?token=` 帶 JWT(走 host 上的中台) |
 | 讀取 search_configs / vacancies | 共用 MariaDB | PDO via `host.docker.internal:3308` |
-| (Roadmap) 觸發爬蟲 | job-digger FastAPI | HTTP POST `http://host.docker.internal:85/api/scrape/{config_id}` |
+| 使用者手動觸發爬蟲(今日 keyword) | job-digger FastAPI | 瀏覽器 fetch `POST http://localhost:85/api/scrape/{id}` |
+| 排程觸發爬蟲(非今日 keyword) | job-digger FastAPI | PHP container `POST http://host.docker.internal:85/api/scrape/{id}` |
 
 完整時序圖見 [`sequence-diagrams.md`](./sequence-diagrams.md)。
+
+---
+
+## 6.1 排程設計(每日 03:00)
+
+「為什麼非今日的 keyword 要走排程?」
+
+- **避免使用者等**:單一 keyword 完整 ETL(A→B→C 三階段)約 30~60 分鐘,讓使用者在前台等不切實際
+- **避免同時跑多個**:job-digger 後端有全域鎖(`HTTP 409`)只允許一個 keyword 同時在跑,排程序列化呼叫剛好對應這個限制
+- **今日 keyword 例外**:剛建立的 keyword 使用者通常想立刻看結果,所以保留手動觸發按鈕(後端 API 用 `created_at = today` 條件守衛)
+
+實作:
+
+| 元件 | 角色 |
+|---|---|
+| `app/Console/Commands/ScrapeAllPending.php` | 撈出 `created_at != today` 的 keyword,逐一 POST + 輪詢 status |
+| `routes/console.php` | 註冊 `Schedule::command('scrape:all-pending')->dailyAt('03:00')` |
+| `supervisord.conf` | 用 `php artisan schedule:work` 取代傳統 cron,supervisor 管 long-running |
+| `entrypoint.sh` | 啟動時 `exec supervisord` 同時拉起 php-fpm + scheduler |
+
+詳見 [`sequence-diagrams.md` 第 4 節](./sequence-diagrams.md#4-排程觸發爬蟲)。
 
 ---
 
@@ -253,7 +276,6 @@ flowchart TD
 
 | 項目 | 現況 | 下一步 |
 |---|---|---|
-| 「執行爬蟲」按鈕 | UI 是 stub(alert「尚未實作」) | 接 job-digger `POST /api/scrape/{id}`,輪詢 `GET /api/scrape/status/{id}` |
 | 沒接 refresh token | 中台沒給,access 過期 = 重登中台 | 等中台支援 refresh token |
 | 權限細分 | 所有 SSO user 權限相同 | 加 RBAC,User 加 `roles` 欄位,middleware 套 `can:` |
 | 觀測性 | dev:看 Laravel log;prod:無 | 加 Telescope 或 Sentry |

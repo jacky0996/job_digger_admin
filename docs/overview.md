@@ -38,7 +38,8 @@ flowchart LR
     nginx -. "2. 沒登入 → redirect" .-> idp
     idp -. "3. 簽 JWT redirect 回 /sso/callback" .-> nginx
     app -- "4. CRUD search_configs / vacancies" --> db
-    app -. "5. (Roadmap) 觸發爬蟲" .-> api
+    user -. "5a. 點「更新」(今日 keyword)" .-> api
+    app -. "5b. 排程 03:00 逐一觸發<br/>(scrape:all-pending)" .-> api
 ```
 
 **關鍵設計**
@@ -61,9 +62,10 @@ flowchart LR
 ```
 我在 Admin 設定關鍵字(如 "PHP 後端")+ 過濾標籤(如 "後端,軟體")
    ↓
-(Roadmap) 點「執行爬蟲」按鈕 → 呼叫 job-digger FastAPI
+今日剛建立 → 列表出現「更新」按鈕 → 確認 ETL 提示 → 觸發 job-digger 爬蟲
+過往 keyword → 顯示「由排程執行」,每天 03:00 由 schedule:work 自動跑
    ↓
-job-digger 三階段爬完寫進 vacancies 表
+job-digger 三階段(A→B→C)爬完寫進 vacancies + 更新 last_scraped_at
    ↓
 我在 Admin 的職缺搜尋頁看結果(可依關鍵字過濾)
 ```
@@ -81,7 +83,7 @@ job-digger 三階段爬完寫進 vacancies 表
 
 ### ❌ Out of Scope
 
-- **執行爬蟲**:由 job-digger 處理(本系統最多在 Roadmap 加「觸發」按鈕呼叫它)
+- **執行爬蟲**:由 job-digger 處理。本系統負責「**觸發**」(使用者按按鈕 / 排程 03:00 自動跑),爬蟲本身的 A→B→C 三階段邏輯都在 job-digger
 - **寫 vacancies**:這是爬蟲的責任
 - **業務 schema migration**:`search_configs` / `vacancies` schema 由 job-digger 的 `init.sql` 維護
 - **使用者註冊 / 簽 JWT**:中台負責
@@ -119,7 +121,7 @@ job-digger 三階段爬完寫進 vacancies 表
 | **可用性** | 中台短暫不可用時,**已登入使用者不立即被踢** | Laravel session 有效期間(預設 120 分鐘)維持登入 |
 | **資安** | API 不被未授權呼叫 | `AuthorizeJwtSso` middleware 套全部業務路由 |
 | **可演進** | 未來想接其他爬蟲 service 不必大改 | Repository 層隔離 DB 操作,Service 層可接外部 API |
-| **故障隔離** | 中台 / job-digger 任一炸,本系統能優雅降級 | 中台炸:已登入仍可看資料;job-digger 炸:Roadmap 觸發按鈕 fail 但其他正常 |
+| **故障隔離** | 中台 / job-digger 任一炸,本系統能優雅降級 | 中台炸:已登入仍可看資料;job-digger 炸:更新按鈕跳錯但 CRUD / 列表正常 |
 
 ---
 

@@ -281,8 +281,8 @@
     const STAGE_LABELS = {
         'init': '準備中',
         'A': 'Stage A · 清單採集',
-        'C': 'Stage C · 內文過濾',
-        'B': 'Stage B · 公司資料補全',
+        'B': 'Stage B · 內文過濾',
+        'C': 'Stage C · 公司資料補全',
         'done': '✅ 已完成',
         'failed': '❌ 失敗',
     };
@@ -455,7 +455,7 @@
             alert('請先選擇關鍵字');
             return;
         }
-        if (!confirm(`確定要針對「${keyword}」啟動資料抓取任務嗎？\n背景執行 Stage A → C → B,可離開此頁,進度會繼續更新。`)) {
+        if (!confirm(`確定要針對「${keyword}」啟動資料抓取任務嗎？\n背景執行 Stage A → B → C,可離開此頁,進度會繼續更新。`)) {
             return;
         }
 

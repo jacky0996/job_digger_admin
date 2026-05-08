@@ -29,9 +29,13 @@ erDiagram
 
     SEARCH_CONFIGS {
         int      id PK
-        string   keyword UK "104 搜尋關鍵字"
-        text     filter_tags "comma-separated 過濾標籤"
+        string   keyword UK
+        text     filter_tags
         ts       created_at
+        ts       last_scraped_at "上次成功爬完時間 (job-digger 寫)"
+        string   created_by_email "Admin 寫"
+        string   updated_by_email "Admin 寫"
+        ts       updated_at "Admin 寫"
     }
 
     VACANCIES {
@@ -105,7 +109,12 @@ CREATE TABLE search_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     keyword VARCHAR(50) NOT NULL UNIQUE,
     filter_tags TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_scraped_at TIMESTAMP NULL DEFAULT NULL,         -- 最後一次成功完整跑完(A→B→C)的時間
+    -- 以下欄位由 admin Laravel migration 加(不在 job-digger init.sql)
+    created_by_email VARCHAR(191) NULL,
+    updated_by_email VARCHAR(191) NULL,
+    updated_at       TIMESTAMP    NULL
 );
 ```
 
@@ -119,6 +128,19 @@ CREATE TABLE search_configs (
 | 刪除 | `SearchConfigController@destroy` | `DELETE FROM search_configs WHERE id = ?` |
 
 **注意**:本系統可以對它做任何修改,但**任何修改會立即影響 job-digger 下次跑爬蟲的關鍵字清單**。沒有「pending 狀態」的設計,改完就生效。
+
+#### 重要欄位:`last_scraped_at`
+
+| 點 | 細節 |
+|---|---|
+| 寫入者 | **job-digger** 的 `app.py::start_scraping_task` 在任務 stage 變 `done` 時 `UPDATE last_scraped_at = NOW()` |
+| 寫入時機 | **僅成功跑完整輪**(三階段都過)— 中途失敗不更新,所以這欄永遠代表「上次拿到完整資料的時間」 |
+| Admin 怎麼用 | 列表頁顯示 `{{ $config->last_scraped_at->diffForHumans() }}`(model 已 `'datetime'` cast),NULL 顯示「尚未執行」 |
+| 排程怎麼用 | `ScrapeAllPending` command `ORDER BY last_scraped_at IS NULL DESC, last_scraped_at ASC` — 從沒跑過的最優先,接著最久沒更新的 |
+
+#### 「今日 keyword」判斷
+
+Admin 用 `created_at` 是不是 today 來決定 UI(顯示「更新」按鈕 vs「由排程執行」),後端 job-digger 也有同樣的守衛(`SELECT DATE(created_at) = CURDATE()`),擋住非當日的手動觸發。詳見 [`sequence-diagrams.md` 第 3-4 節](./sequence-diagrams.md#3-使用者手動觸發爬蟲今日-keyword)。
 
 ### 4.2 `vacancies`
 

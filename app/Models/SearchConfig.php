@@ -21,9 +21,16 @@ class SearchConfig extends Model
     ];
 
     protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'created_at'      => 'datetime',
+        'updated_at'      => 'datetime',
+        'last_scraped_at' => 'datetime',
     ];
+
+    /** 是否為今日建立(決定 admin 是否顯示「更新」按鈕)。 */
+    public function isCreatedToday(): bool
+    {
+        return $this->created_at?->isToday() ?? false;
+    }
 
     public function getFilterTagsArrayAttribute(): array
     {

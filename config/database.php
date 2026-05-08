@@ -53,6 +53,9 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // 強制 session timezone +08:00 跟 job-digger 一致,
+            // 否則 admin 寫入的 timestamp 跟 job-digger 讀取的會差 8 小時
+            'timezone' => env('DB_TIMEZONE', '+08:00'),
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,
@@ -73,6 +76,9 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // 強制 session timezone +08:00 跟 job-digger 一致,
+            // 否則 admin 寫入的 timestamp 跟 job-digger 讀取的會差 8 小時
+            'timezone' => env('DB_TIMEZONE', '+08:00'),
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,

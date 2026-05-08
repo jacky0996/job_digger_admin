@@ -33,9 +33,16 @@
             <section id="overview" class="bg-white shadow-sm rounded-lg ring-1 ring-slate-200 px-5 sm:px-8 py-6 scroll-mt-6">
                 <h2 class="text-xl font-semibold text-slate-900">系統簡介</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-700">
-                    Job Digger Admin 是 Job Digger 專案的管理後台，與 Python 端的爬蟲共用同一個資料庫
-                    本後台僅做設定與檢視，不直接執行爬取；爬蟲與清洗由另一個 Python 服務負責。
+                    為了解決自身使用104不便的問題，開發了這套爬蟲後台管理系統。主要功能包含：
                 </p>
+                <ol class="mt-3 space-y-2 text-sm leading-7 text-slate-700 list-decimal list-inside">
+                    <li>
+                        可以從清單的角度直接看到公司資本額及人數規模（<strong>這兩個資訊在104上需要透過跳頁才能看到</strong>），並且可以設定關鍵字來過濾職缺標題，讓爬蟲只保留相關的職缺資料。
+                    </li>
+                    <li>
+                        可以更精轉的知道該職缺是否符合自己的求職條件（<strong>有時候開缺者不清楚實際需求，會在擅長工具打一堆關鍵字，使得求職者混淆</strong>），並且直接跳轉到104的職缺頁面查看詳細資訊。
+                    </li>
+                </ol>
                 <ul class="mt-4 space-y-2 text-sm text-slate-700">
                     <li class="flex gap-2">
                         <span class="text-blue-600 font-bold">·</span>
@@ -156,7 +163,7 @@
                             <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">職缺職稱</td><td class="px-3 py-2 text-slate-700">點擊跳到 104 職缺頁。</td></tr>
                             <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">公司</td><td class="px-3 py-2 text-slate-700">點擊跳到 104 公司頁。</td></tr>
                             <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">薪資</td><td class="px-3 py-2 text-slate-700">原始薪資文字（未轉換）。</td></tr>
-                            <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">資本額 / 員工數</td><td class="px-3 py-2 text-slate-700">由 Python 端 Stage B 補資料；尚未補完會顯示「—」。</td></tr>
+                            <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">資本額 / 員工數</td><td class="px-3 py-2 text-slate-700">由 Python 端ETL行為逐筆撰寫；尚未補完會顯示「—」。</td></tr>
                             <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">狀態</td><td class="px-3 py-2 text-slate-700"><span class="inline-flex items-center rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">在徵</span> 或 <span class="inline-flex items-center rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">已關</span>。</td></tr>
                             <tr><td class="px-3 py-2 font-medium text-slate-900 align-top">抓取時間</td><td class="px-3 py-2 text-slate-700">爬蟲第一次抓到該職缺的時間。</td></tr>
                         </tbody>

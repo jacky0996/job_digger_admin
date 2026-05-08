@@ -2,11 +2,12 @@
 
 本文件用 UML Sequence Diagram 描述 Job Digger Admin 的關鍵互動流程。目標讀者:**SA、開發者、想理解跨系統時序的 Reviewer**。
 
-涵蓋三個流程:
+涵蓋以下流程:
 
 1. SSO 進站(Web Mode)— 從沒登入到看見業務頁
 2. Search Config CRUD(常見業務操作)
-3. (Roadmap)觸發爬蟲 — Admin → job-digger FastAPI
+3. 使用者手動觸發爬蟲(今日 keyword)
+4. 排程觸發爬蟲(非今日 keyword)
 
 ---
 
@@ -115,64 +116,139 @@ sequenceDiagram
 
 ---
 
-## 3. (Roadmap)觸發爬蟲流程
+## 3. 使用者手動觸發爬蟲(今日 keyword)
 
-「Admin 點『執行爬蟲』按鈕,系統如何串到 job-digger?」
+「使用者剛建好 keyword 想立刻看結果,系統如何串到 job-digger?」
 
-> ⚠ 此流程**目前是 stub**,UI 會跳 alert「尚未實作」。本節描述 Roadmap 設計。
+> 設計約束:**只有今日建立的 keyword** 才會在 admin 看到「更新」按鈕,過往 keyword 由排程處理(見第 4 節)。
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor U as 使用者
-    participant V as 關鍵字列表頁
-    participant C as SearchConfigController
-    participant J as JobDiggerService<br/>(待寫)
+    actor U as 使用者 (Browser)
+    participant V as 關鍵字列表頁 (Blade)
     participant API as job-digger FastAPI :85
-    participant DB as MariaDB<br/>(vacancies)
+    participant DB as MariaDB<br/>(vacancies / search_configs)
 
-    U->>V: 點某 search_config 的「執行爬蟲」
-    V->>C: POST /search-configs/{id}/scrape
-    C->>J: triggerScrape($id)
-    J->>API: POST http://host.docker.internal:85/api/scrape/{id}
+    Note over V: Blade 渲染時用 $config->isCreatedToday()<br/>決定是否顯示「更新」按鈕
 
-    API->>API: BackgroundTasks.add_task(start_scraping_task, $id)
-    API-->>J: HTTP 200 {"status": "accepted", ...}
-    J-->>C: ok
-    C-->>U: 顯示「爬蟲已啟動」+ 按鈕變灰
+    U->>V: 點「更新」(綠色按鈕)
+    V->>U: confirm("⚠️ 資料 ETL 提醒,預計 30~60 分鐘...")
+    U->>V: 確定
+
+    V->>API: fetch POST http://localhost:85/api/scrape/{id}
+    API->>DB: 守衛:SELECT created_at = today AND id = ?
+
+    alt 非今日(403)
+        API-->>V: HTTP 403 "此關鍵字非今日建立..."
+    else 同 keyword 在跑(400)
+        API-->>V: HTTP 400 "此關鍵字的抓取任務已在執行中"
+    else 別的 keyword 在跑(409 全域鎖)
+        API-->>V: HTTP 409 "另一個關鍵字正在執行中"
+    else 通過所有檢查
+        API->>API: BackgroundTasks.add_task(start_scraping_task)
+        API-->>V: HTTP 200 {"status": "accepted"}
+        V-->>U: alert "✅ 已開始,任務在背景執行"
+    end
 
     Note over API: --- 背景非同步進行 ---
-    API->>API: Stage A: run_list_scraper
-    API->>API: Stage C: run_content_scraper (filter)
-    API->>API: Stage B: run_company_scraper
-    API->>DB: UPSERT vacancies
+    API->>API: Stage A: 抓清單
+    API->>API: Stage B: 內文清洗(僅 check_type=NULL or 偵測逾時)
+    API->>API: Stage C: 公司資訊補全(僅資本額/員工數空的)
+    API->>DB: UPSERT vacancies + UPDATE search_configs.last_scraped_at = NOW()
 
-    Note over U: 使用者可去其他頁,稍後回來看
-    U->>V: 重新進「職缺搜尋」頁
-    V->>DB: SELECT * FROM vacancies WHERE keyword = ?
-    DB-->>V: 結果
-    V-->>U: 顯示新抓回的職缺
-
-    Note over U,V: (進階)輪詢狀態:
-    U->>V: 自動每 5 秒
-    V->>API: GET http://host.docker.internal:85/api/scrape/status/{id}
-    API-->>V: {"is_running": true/false}
-    V-->>U: 更新按鈕狀態
+    Note over U: 使用者可去其他頁
+    U->>V: 重整列表
+    V->>DB: SELECT search_configs (Eloquent)
+    V-->>U: 顯示「最後爬蟲」時間更新
 ```
 
-**Roadmap 實作要點**
+**錯誤碼總表**
 
-| 項 | 說明 |
-|---|---|
-| `JobDiggerService` | 新建 `app/Services/JobDiggerService.php`,封裝 HTTP 呼叫(Guzzle) |
-| `JOB_DIGGER_API_URL` env | 預設 `http://host.docker.internal:85`,可改 `http://localhost:85`(本機 dev) |
-| 「執行中」狀態追蹤 | UI 用輪詢 `GET /api/scrape/status/{id}`,或 server-side flash session 暫存最近啟動的 id |
-| 失敗處理 | job-digger API 不會回失敗(內部 task 失敗只在 log),Admin 端用 timeout(例如 10 分鐘沒新資料就提示「可能失敗,請看 docker log」) |
-| Rate limit | 同一 keyword 連按多次:job-digger 已用 `active_tasks` set 擋了,Admin 也應該 disable 按鈕 |
+| HTTP | 場景 | 前端訊息 |
+|---|---|---|
+| 200 | 啟動成功 | ✅ 已開始,任務在背景執行 |
+| 400 | 同 keyword 已在跑 | ⏸ 此關鍵字的任務已在執行中 |
+| 403 | 非今日建立(守衛) | ⛔ 此關鍵字非今日建立,將由排程自動執行 |
+| 404 | config_id 不存在 | ❌ 啟動失敗 |
+| 409 | 別的 keyword 在跑(全域鎖) | ⏸ 另一個關鍵字正在執行中,請稍後再試 |
 
 ---
 
-## 4. 登出流程
+## 4. 排程觸發爬蟲
+
+「過往 keyword 怎麼定期更新?排程是怎麼跑的?」
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SUP as supervisord (PID 1)
+    participant SW as schedule:work<br/>(php artisan)
+    participant CMD as ScrapeAllPending<br/>command
+    participant DB as MariaDB
+    participant API as job-digger FastAPI :85
+
+    Note over SUP: container 啟動時 entrypoint exec /usr/bin/supervisord
+    SUP->>SW: 子程序 1:php-fpm (web)
+    SUP->>SW: 子程序 2:php artisan schedule:work
+
+    Note over SW: schedule:work 每分鐘自動 schedule:run
+    loop 每分鐘
+        SW->>SW: schedule:run (檢查時間表)
+    end
+
+    Note over SW: 03:00 觸發 scrape:all-pending
+    SW->>CMD: php artisan scrape:all-pending
+    CMD->>DB: SELECT * FROM search_configs<br/>WHERE created_at != today<br/>ORDER BY last_scraped_at NULLS FIRST, ASC
+
+    loop 每個 pending keyword (序列)
+        CMD->>API: POST /api/scrape/{id}
+
+        alt 200 接受
+            CMD-->>CMD: 進入輪詢
+            loop 每 30 秒 (poll_interval)
+                CMD->>API: GET /api/scrape/status/{id}
+                API-->>CMD: {"is_running": ?, "stage": ?}
+                Note over CMD: 直到 is_running=false<br/>或超過 task_timeout(預設 2hr)
+            end
+        else 409 全域鎖
+            CMD->>CMD: skip,留給下次 schedule
+        else 403 / 其他
+            CMD->>CMD: log warning,跳下一個
+        end
+    end
+
+    CMD-->>SW: 結束(成功 / 失敗 / 略過 計數)
+    SW->>SW: appendOutputTo(storage/logs/scrape-all-pending.log)
+```
+
+**設計重點**
+
+| 項 | 說明 |
+|---|---|
+| 為何序列化 | job-digger 全域只允許一個 keyword 同時跑(避免多隻 Chromium 爆 RAM、CF ban) |
+| 為何排除今日 | 使用者通常剛建好就想看結果,不想等到隔天;排程跳過今日避免和手動觸發撞車 |
+| 為何用 schedule:work | Laravel 11 內建,自帶分鐘 ticker,**取代傳統 cron**;supervisor 管 long-running 重啟邏輯一致 |
+| `withoutOverlapping(120)` | 跨日還沒跑完就不重複觸發(整輪 1~2 小時,鎖 120 分鐘安全) |
+| `task_timeout` | 單筆 keyword 超過 2 小時視為卡死,放棄等待繼續下一個 |
+| 觀測 | `storage/logs/scrape-all-pending.log` + `docker logs job_digger_admin_app`(supervisor stdout passthrough) |
+
+**手動測試命令**
+
+```bash
+# 看會處理哪些 keyword(不實際觸發)
+docker exec -it job_digger_admin_app php artisan scrape:all-pending --dry-run
+
+# 實際跑(忽略 03:00 排程,立刻執行)
+docker exec -it job_digger_admin_app php artisan scrape:all-pending
+
+# 確認 supervisor 兩支程序都活著
+docker exec job_digger_admin_app supervisorctl status
+
+# 看排程列表
+docker exec job_digger_admin_app php artisan schedule:list
+```
+## 5. 登出流程
 
 ```mermaid
 sequenceDiagram
@@ -195,7 +271,7 @@ sequenceDiagram
 
 ---
 
-## 5. 跨系統 overview
+## 6. 跨系統 overview
 
 整合三個流程的整體 view:
 
@@ -222,8 +298,8 @@ sequenceDiagram
     U->>A: 看職缺
     A->>DB: SELECT vacancies
 
-    Note over U,DB: --- (Roadmap) 觸發爬蟲 ---
-    U->>A: 點「執行爬蟲」
+    Note over U,DB: --- 手動觸發爬蟲(今日 keyword) ---
+    U->>A: 點「更新」
     A->>JD: POST /api/scrape/{id}
     JD->>JD: background task: list/content/company
     JD->>DB: UPSERT vacancies
