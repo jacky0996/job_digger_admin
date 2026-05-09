@@ -14,7 +14,8 @@ class SearchConfig extends Model
 
     protected $fillable = [
         'keyword',
-        'filter_tags',
+        'title_tags',
+        'content_tags',
         'created_by_email',
         'updated_by_email',
         'updated_at',
@@ -32,26 +33,39 @@ class SearchConfig extends Model
         return $this->created_at?->isToday() ?? false;
     }
 
-    public function getFilterTagsArrayAttribute(): array
+    /** Stage A 過濾標籤(標題層) — 給 view 渲染 chip。 */
+    public function getTitleTagsArrayAttribute(): array
     {
-        if (empty($this->filter_tags)) {
+        return self::splitTags($this->title_tags);
+    }
+
+    /** Stage B 過濾標籤(內文層) — 給 view 渲染 chip。 */
+    public function getContentTagsArrayAttribute(): array
+    {
+        return self::splitTags($this->content_tags);
+    }
+
+    private static function splitTags(?string $raw): array
+    {
+        if (empty($raw)) {
             return [];
         }
 
-        return collect(explode(',', $this->filter_tags))
+        return collect(explode(',', $raw))
             ->map(fn ($tag) => trim($tag))
             ->filter()
             ->values()
             ->all();
     }
 
-    public static function normalizeFilterTags(?string $raw): ?string
+    /** 把 textarea 的多行 / 全形逗號等正規化成「a,b,c」儲存格式。 */
+    public static function normalizeTags(?string $raw): ?string
     {
         if ($raw === null) {
             return null;
         }
 
-        $tags = collect(preg_split('/[\r\n,，、]+/u', $raw))
+        $tags = collect(preg_split('/[\r\n,,、]+/u', $raw))
             ->map(fn ($tag) => trim($tag))
             ->filter()
             ->unique()

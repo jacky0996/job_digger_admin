@@ -156,7 +156,8 @@ classDiagram
     class SearchConfig {
         +int id
         +string keyword [unique, max 50]
-        +text filter_tags [comma-separated]
+        +text title_tags
+        +text content_tags
         +datetime created_at
         --
         +CRUD via SearchConfigController
@@ -189,7 +190,7 @@ classDiagram
 **設計重點**
 
 - **User 不存密碼明文也不會被 check_password 驗** — `password` 欄位寫一個 `bcrypt(Str::random(40))` 的隨機值,只是讓 Laravel `User` 模型結構完整,實際登入只走 SSO
-- **SearchConfig.filter_tags** 用 comma-separated string 而非 JSON,跟 job-digger 的 schema 對齊(同一張表,兩端讀)
+- **SearchConfig.title_tags / content_tags** 用 comma-separated string 而非 JSON,跟 job-digger 的 schema 對齊(同一張表,兩端讀)
 - **Vacancy.job_link UNIQUE** — 防止 job-digger 重複插入(UPSERT 用),admin 不寫所以不影響
 
 ---

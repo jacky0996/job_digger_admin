@@ -30,7 +30,8 @@ erDiagram
     SEARCH_CONFIGS {
         int      id PK
         string   keyword UK
-        text     filter_tags
+        text     title_tags    "Stage A:標題層過濾"
+        text     content_tags  "Stage B:內文層過濾"
         ts       created_at
         ts       last_scraped_at "上次成功爬完時間 (job-digger 寫)"
         string   created_by_email "Admin 寫"
@@ -108,10 +109,11 @@ CREATE TABLE users (
 CREATE TABLE search_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     keyword VARCHAR(50) NOT NULL UNIQUE,
-    filter_tags TEXT,
+    title_tags TEXT,        -- Stage A 用
+    content_tags TEXT,      -- Stage B 用
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_scraped_at TIMESTAMP NULL DEFAULT NULL,         -- 最後一次成功完整跑完(A→B→C)的時間
-    -- 以下欄位由 admin Laravel migration 加(不在 job-digger init.sql)
+    -- 以下 audit 欄位 admin (Laravel) 寫入,但 schema 統一由 job-digger 的 init.sql 管
     created_by_email VARCHAR(191) NULL,
     updated_by_email VARCHAR(191) NULL,
     updated_at       TIMESTAMP    NULL

@@ -94,13 +94,13 @@ sequenceDiagram
     U->>V: 進「關鍵字 → 新增」頁
     V-->>U: 渲染表單
 
-    U->>C: POST /search-configs<br/>{keyword: "PHP", filter_tags: "php,後端"}
+    U->>C: POST /search-configs<br/>{keyword: "PHP", title_tags: "php,後端", content_tags: "php,後端"}
     C->>C: middleware (AuthorizeJwtSso) 通過 ✓
     C->>C: validate (keyword required, unique)
 
     alt validation 通過
         C->>M: SearchConfig::create(...)
-        M->>DB: INSERT INTO search_configs (keyword, filter_tags, created_at) VALUES (?, ?, NOW())
+        M->>DB: INSERT INTO search_configs (keyword, title_tags, content_tags, created_at) VALUES (?, ?, NOW())
         DB-->>M: id
         M-->>C: SearchConfig instance
         C-->>U: 302 → /search-configs (列表頁)

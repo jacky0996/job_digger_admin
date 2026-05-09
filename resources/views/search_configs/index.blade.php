@@ -38,12 +38,23 @@
                                     <span class="text-xs text-slate-400">#{{ $config->id }}</span>
                                     <span class="font-semibold text-slate-900 truncate">{{ $config->keyword }}</span>
                                 </div>
-                                <div class="mt-2 flex flex-wrap gap-1">
-                                    @forelse ($config->filter_tags_array as $tag)
-                                        <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{{ $tag }}</span>
-                                    @empty
-                                        <span class="text-xs text-slate-400">無過濾標籤</span>
-                                    @endforelse
+                                <div class="mt-2 space-y-1">
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        <span class="text-[10px] uppercase tracking-wider text-slate-400 mr-1">標題</span>
+                                        @forelse ($config->title_tags_array as $tag)
+                                            <span class="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-blue-100">{{ $tag }}</span>
+                                        @empty
+                                            <span class="text-xs text-slate-400">—</span>
+                                        @endforelse
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        <span class="text-[10px] uppercase tracking-wider text-slate-400 mr-1">內文</span>
+                                        @forelse ($config->content_tags_array as $tag)
+                                            <span class="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 ring-1 ring-emerald-100">{{ $tag }}</span>
+                                        @empty
+                                            <span class="text-xs text-slate-400">—</span>
+                                        @endforelse
+                                    </div>
                                 </div>
                                 <div class="mt-2 text-xs text-slate-400 space-y-0.5">
                                     <div>建立 {{ optional($config->created_at)->format('Y-m-d H:i') ?? '—' }} · {{ $config->created_by_email ?? '—' }}</div>
@@ -103,7 +114,7 @@
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-16">ID</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-48">搜尋關鍵字</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">過濾標籤 (清洗用)</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">過濾標籤<br><span class="text-[10px] normal-case font-normal text-slate-400">標題=Stage A / 內文=Stage B</span></th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-44">建立 / 更新</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-40">最後爬蟲</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-56">操作</th>
@@ -115,12 +126,23 @@
                                 <td class="px-4 py-3 text-sm text-slate-500">{{ $config->id }}</td>
                                 <td class="px-4 py-3 text-sm font-semibold text-slate-900">{{ $config->keyword }}</td>
                                 <td class="px-4 py-3 text-sm">
-                                    <div class="flex flex-wrap gap-1">
-                                        @forelse ($config->filter_tags_array as $tag)
-                                            <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{{ $tag }}</span>
-                                        @empty
-                                            <span class="text-xs text-slate-400">—</span>
-                                        @endforelse
+                                    <div class="space-y-1.5">
+                                        <div class="flex flex-wrap items-center gap-1">
+                                            <span class="text-[10px] uppercase tracking-wider text-slate-400 mr-1 w-8">標題</span>
+                                            @forelse ($config->title_tags_array as $tag)
+                                                <span class="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-blue-100">{{ $tag }}</span>
+                                            @empty
+                                                <span class="text-xs text-slate-400">—</span>
+                                            @endforelse
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-1">
+                                            <span class="text-[10px] uppercase tracking-wider text-slate-400 mr-1 w-8">內文</span>
+                                            @forelse ($config->content_tags_array as $tag)
+                                                <span class="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 ring-1 ring-emerald-100">{{ $tag }}</span>
+                                            @empty
+                                                <span class="text-xs text-slate-400">—</span>
+                                            @endforelse
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">

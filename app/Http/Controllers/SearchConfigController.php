@@ -28,7 +28,8 @@ class SearchConfigController extends Controller
 
         SearchConfig::create([
             'keyword'          => $data['keyword'],
-            'filter_tags'      => SearchConfig::normalizeFilterTags($data['filter_tags'] ?? null),
+            'title_tags'       => SearchConfig::normalizeTags($data['title_tags'] ?? null),
+            'content_tags'     => SearchConfig::normalizeTags($data['content_tags'] ?? null),
             'created_by_email' => $email,
         ]);
 
@@ -48,7 +49,8 @@ class SearchConfigController extends Controller
 
         $searchConfig->update([
             'keyword'          => $data['keyword'],
-            'filter_tags'      => SearchConfig::normalizeFilterTags($data['filter_tags'] ?? null),
+            'title_tags'       => SearchConfig::normalizeTags($data['title_tags'] ?? null),
+            'content_tags'     => SearchConfig::normalizeTags($data['content_tags'] ?? null),
             'updated_by_email' => Auth::user()?->email,
             'updated_at'       => now(),
         ]);
@@ -76,10 +78,12 @@ class SearchConfigController extends Controller
                 'max:50',
                 Rule::unique('search_configs', 'keyword')->ignore($ignoreId),
             ],
-            'filter_tags' => ['nullable', 'string', 'max:5000'],
+            'title_tags'   => ['nullable', 'string', 'max:5000'],
+            'content_tags' => ['nullable', 'string', 'max:5000'],
         ], [], [
-            'keyword'     => '搜尋關鍵字',
-            'filter_tags' => '過濾標籤',
+            'keyword'      => '搜尋關鍵字',
+            'title_tags'   => '標題過濾標籤',
+            'content_tags' => '內文過濾標籤',
         ]);
     }
 }
