@@ -58,6 +58,28 @@ class SearchConfig extends Model
             ->all();
     }
 
+    /**
+     * 關鍵字正規化:trim + 全形 ASCII/空白轉半形 + 轉小寫。
+     * 目的:避免「PHP」「php」「ＰＨＰ」「PHP 」這類視覺相同但字元不同的重複。
+     * 注意:中文不受 mb_convert_kana 'as' 影響,只會被 trim/lower(中文無大小寫所以無感)。
+     */
+    public static function normalizeKeyword(?string $raw): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        $normalized = mb_convert_kana(trim($raw), 'as', 'UTF-8');
+
+        return mb_strtolower($normalized, 'UTF-8');
+    }
+
+    /** 兜底:任何途徑寫入(controller / seeder / artisan)都自動正規化。 */
+    public function setKeywordAttribute($value): void
+    {
+        $this->attributes['keyword'] = self::normalizeKeyword($value);
+    }
+
     /** 把 textarea 的多行 / 全形逗號等正規化成「a,b,c」儲存格式。 */
     public static function normalizeTags(?string $raw): ?string
     {

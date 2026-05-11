@@ -46,6 +46,7 @@
                             <option value="加分條件或必要條件內有含關鍵字" @selected($selectedCheckType === '加分條件或必要條件內有含關鍵字')>2. 加分/必要條件含關鍵字</option>
                             <option value="僅有擅長工具含關鍵字,建議確認後再進行履歷投遞" @selected($selectedCheckType === '僅有擅長工具含關鍵字,建議確認後再進行履歷投遞')>3. 僅有擅長工具含關鍵字 (建議確認)
                             </option>
+                            <option value="no_match" @selected($selectedCheckType === 'no_match')>4. 無符合 (no_match)</option>
                         </select>
                     </div>
 
@@ -251,6 +252,9 @@
                                         @elseif (str_contains($vacancy->check_type, '僅有擅長工具含關鍵字'))
                                             <span
                                                 class="inline-flex items-center rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-700/10">僅擅長工具</span>
+                                        @elseif ($vacancy->check_type === 'no_match')
+                                            <span
+                                                class="inline-flex items-center rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">無符合</span>
                                         @else
                                             <span class="text-slate-400 text-xs">—</span>
                                         @endif

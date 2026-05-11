@@ -209,7 +209,7 @@
                     </div>
                     <div>
                         <p class="font-medium text-slate-900">Q. 「更新資料」按鈕的功能是什麼？</p>
-                        <p class="mt-1 text-slate-700 leading-7">A. 此功能會直接呼叫 Python 端 (Port 83) 的 API，並將該關鍵字的 ID 送出。Python 服務接收後會立即在背景啟動完整的抓取與清洗流程 (Stage A, C, B)。</p>
+                        <p class="mt-1 text-slate-700 leading-7">A. 此功能會直接呼叫 Python 端 (Port 83) 的 API，並將該關鍵字的 ID 送出。Python 服務接收後會立即在背景啟動完整的抓取與清洗流程 (Stage A, B, C)。</p>
                     </div>
                     <div>
                         <p class="font-medium text-slate-900">Q. 刪除關鍵字會不會連帶刪除已抓的職缺？</p>

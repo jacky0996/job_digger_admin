@@ -71,6 +71,12 @@ class SearchConfigController extends Controller
 
     private function validateInput(Request $request, ?int $ignoreId = null): array
     {
+        // 先正規化(trim、全形→半形、轉小寫)再驗證,unique 才擋得住
+        // 「ＰＨＰ」「PHP 」「php」這類視覺相同但字元不同的重複輸入。
+        $request->merge([
+            'keyword' => SearchConfig::normalizeKeyword($request->input('keyword')),
+        ]);
+
         return $request->validate([
             'keyword' => [
                 'required',
