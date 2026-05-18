@@ -94,5 +94,38 @@
             @yield('content')
         </main>
     </div>
+
+    {{-- SSO session heartbeat — 每 60 秒輕量 ping /sso/ping
+         拿到 401 表示中台 session 已過期,提示後自動跳回登入頁
+         不依賴使用者操作即可主動偵測,避免使用者填到一半 submit 才被踢 --}}
+    <script>
+        (function () {
+            const PING_URL = '{{ route('sso.ping') }}';
+            const LOGOUT_URL = '{{ route('sso.logout') }}';
+            const INTERVAL_MS = 60_000;
+
+            async function check() {
+                try {
+                    const res = await fetch(PING_URL, {
+                        credentials: 'same-origin',
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store',
+                    });
+                    if (res.status === 401) {
+                        // 不要直接跳,先提示一下避免使用者錯愕
+                        if (!window.__sso_expired_notified) {
+                            window.__sso_expired_notified = true;
+                            alert('您的登入已逾期,即將導回登入頁。');
+                            window.location.href = LOGOUT_URL;
+                        }
+                    }
+                } catch (_e) {
+                    // 網路錯誤忽略,下一次再試
+                }
+            }
+
+            setInterval(check, INTERVAL_MS);
+        })();
+    </script>
 </body>
 </html>

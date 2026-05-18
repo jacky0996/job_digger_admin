@@ -3,10 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
+use App\Services\SsoJwtVerifier;
 use Closure;
 use Exception;
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +29,8 @@ use Illuminate\Support\Str;
  */
 class AuthorizeJwtSso
 {
+    public function __construct(private SsoJwtVerifier $verifier) {}
+
     public function handle(Request $request, Closure $next)
     {
         // 1. Already logged in
@@ -69,21 +70,12 @@ class AuthorizeJwtSso
     }
 
     /**
-     * Decode JWT using SSO 共用密鑰 (HS256).
-     * 跟中台 (Middle_Platform) DJANGO_SECRET_KEY 必須完全一致。
-     *
-     * 故意用 sso.jwt_secret 而不是 app.key:
-     *   - app.key 是 Laravel AES-256-CBC 用,要求 exactly 32 bytes
-     *   - 中台 SECRET_KEY 通常是長字串,塞給 Laravel 做 AES key 會炸
+     * 驗章工作委派給 SsoJwtVerifier — 同時支援 HS256 (legacy) 與 RS256/JWKS。
+     * 演算法由 config/sso.php 控制,所有業務系統共用同一驗章原則。
      */
     private function decodeJwt(string $token): object
     {
-        $key = config('sso.jwt_secret');
-        if (str_starts_with($key, 'base64:')) {
-            $key = base64_decode(substr($key, 7));
-        }
-
-        return JWT::decode($token, new Key($key, 'HS256'));
+        return $this->verifier->decode($token);
     }
 
     /**

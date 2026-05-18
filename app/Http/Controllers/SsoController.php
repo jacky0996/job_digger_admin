@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,6 +25,21 @@ class SsoController extends Controller
     {
         // Middleware 已經完成驗證 + Auth::login
         return redirect()->intended('/');
+    }
+
+    /**
+     * 前端 idle ping — 回傳目前 session 是否仍有效。
+     *
+     * 故意不掛 AuthorizeJwtSso middleware,session 失效時直接回 401 給前端,
+     * 避免被 middleware 直接 302 到中台(那會把 ping 變成完整登入流程)。
+     * 前端拿到 401 才自己決定要不要 reload / 提示使用者。
+     */
+    public function ping(): JsonResponse
+    {
+        if (Auth::check()) {
+            return response()->json(['ok' => true]);
+        }
+        return response()->json(['ok' => false], 401);
     }
 
     /**
