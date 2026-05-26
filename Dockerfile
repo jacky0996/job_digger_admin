@@ -6,7 +6,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 WORKDIR /var/www
 
-# 系統依賴 + PHP 擴充(精簡:Laravel 11 + MySQL 用)
+# 系統依賴 + PHP 擴充(Laravel 11 + PostgreSQL 用)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         curl \
@@ -14,11 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
         libzip-dev \
         libonig-dev \
+        libpq-dev \
         netcat-openbsd \
         supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install pdo_mysql mbstring zip pcntl
+RUN docker-php-ext-install pdo_pgsql mbstring zip pcntl
 
 # Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

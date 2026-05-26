@@ -14,10 +14,10 @@ services:
       - .env
     environment:
       TZ: Asia/Taipei
-      # 連到 host 上 job-digger 的 MariaDB
-      DB_CONNECTION: mysql
+      # 連到 host 上 job-digger 的 PostgreSQL
+      DB_CONNECTION: pgsql
       DB_HOST: host.docker.internal
-      DB_PORT: "3308"
+      DB_PORT: "5434"
     extra_hosts:
       # 讓容器內可以透過 host.docker.internal 連到 host(macOS / Linux)
       - "host.docker.internal:host-gateway"

@@ -1,0 +1,79 @@
+# Cloud Run 用 production image。
+#
+# 跟 dev Dockerfile 差別:
+#   - 一個 container 內同時跑 nginx + php-fpm + supervisord(Cloud Run 只能單 container)
+#   - 監聽 Cloud Run 注入的 $PORT,取代固定 9000
+#   - 多階段:Node build vite assets + Composer build vendor + final runtime
+#   - composer install / npm build 在 build 期完成,加快冷啟動
+#   - 拿掉 schedule:work(Cloud Run idle 會被殺,scheduler 用 Cloud Scheduler 打 HTTP)
+
+# ============= Node builder:vite build 前端 assets =============
+FROM node:22-slim AS node_stage
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY resources ./resources
+COPY public ./public
+COPY vite.config.js ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
+RUN npm run build
+
+# ============= Composer builder:vendor + autoload =============
+FROM composer:2 AS composer_stage
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
+
+COPY . .
+RUN composer dump-autoload --optimize --no-dev \
+    && composer install --no-dev --optimize-autoloader --no-interaction
+
+# ============= Runtime stage =============
+FROM php:8.2-fpm
+
+ENV TZ=Asia/Taipei
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+WORKDIR /var/www
+
+# 系統依賴:nginx + supervisord + Postgres driver + 一般 Laravel 套件需求
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx \
+        supervisor \
+        libpq-dev \
+        libzip-dev \
+        libonig-dev \
+        netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN docker-php-ext-install pdo_pgsql mbstring zip pcntl
+
+# 從 composer stage 拉 vendor + code
+COPY --from=composer_stage --chown=www-data:www-data /app /var/www
+
+# 從 node stage 覆蓋 public/build(vite 輸出)
+COPY --from=node_stage --chown=www-data:www-data /app/public/build /var/www/public/build
+
+# nginx + supervisord 設定檔
+COPY docker-compose/nginx/cloudrun.conf /etc/nginx/sites-available/default
+COPY docker-compose/supervisor/cloudrun.conf /etc/supervisor/conf.d/cloudrun.conf
+
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
+# entrypoint:替換 PORT、跑 migrate、啟 supervisord
+COPY entrypoint.cloudrun.sh /usr/local/bin/entrypoint.cloudrun.sh
+RUN chmod +x /usr/local/bin/entrypoint.cloudrun.sh
+
+# Laravel 寫得了 storage / cache
+RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache \
+    && chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+
+ENV PORT=8080
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.cloudrun.sh"]

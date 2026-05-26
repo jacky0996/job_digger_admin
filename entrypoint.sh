@@ -22,9 +22,9 @@ if ! grep -q "^APP_KEY=base64" .env 2>/dev/null && ! grep -q "^APP_KEY=." .env 2
   php artisan key:generate --ansi
 fi
 
-# 5. 等 DB 起來(host.docker.internal:3308 是 job-digger 的 MariaDB)
+# 5. 等 DB 起來(host.docker.internal:5434 是 job-digger 的 PostgreSQL)
 DB_HOST="${DB_HOST:-host.docker.internal}"
-DB_PORT="${DB_PORT:-3308}"
+DB_PORT="${DB_PORT:-5434}"
 echo "Waiting for DB at ${DB_HOST}:${DB_PORT}..."
 for i in $(seq 1 30); do
   if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then

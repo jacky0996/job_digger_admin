@@ -97,6 +97,8 @@ return [
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
             'charset' => env('DB_CHARSET', 'utf8'),
+            // 強制 session timezone +08:00,跟 job-digger 寫入的 timestamp 對齊
+            'timezone' => env('DB_TIMEZONE', '+08:00'),
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
