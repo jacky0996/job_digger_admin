@@ -14,15 +14,15 @@ services:
       - .env
     environment:
       TZ: Asia/Taipei
-      # 連到 host 上 job-digger 的 PostgreSQL
+      # 走 job-digger compose 內部 network,直接用 service name
+      # (改用 docker network 而非 host.docker.internal:Mac DD 的 host-gateway 走 IPv6
+      #  會跟 host port 的 IPv4 bind 對不上,導致 timeout)
       DB_CONNECTION: pgsql
-      DB_HOST: host.docker.internal
-      DB_PORT: "5434"
-    extra_hosts:
-      # 讓容器內可以透過 host.docker.internal 連到 host(macOS / Linux)
-      - "host.docker.internal:host-gateway"
+      DB_HOST: job_db
+      DB_PORT: "5432"
     networks:
       - admin-net
+      - job-digger-net
 
   # Nginx 反向代理 + 靜態檔
   nginx:
@@ -47,3 +47,9 @@ services:
 networks:
   admin-net:
     driver: bridge
+  # job-digger compose 起來時自動建的 default network
+  # (admin 跨進去後可以用 service name 找 scraper-api / job_db)
+  # 雲端不需要這段,直接用 Cloud Run URL
+  job-digger-net:
+    name: job-digger_default
+    external: true
